@@ -1,0 +1,13 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Liga Zaltbommel Logo</title>
+  <desc id="desc">Koyu yesil saha kalkani icinde LZ monogrami.</desc>
+  <rect width="128" height="128" rx="24" fill="#0F1A15"/>
+  <path d="M24 28H104V72C104 91.5 88.2 107.8 64 116C39.8 107.8 24 91.5 24 72V28Z" fill="#0F6B4F"/>
+  <path d="M32 36H96V70.2C96 84.7 84.6 97.1 64 104.8C43.4 97.1 32 84.7 32 70.2V36Z" stroke="#E7F0EA" stroke-width="4"/>
+  <path d="M64 38V103" stroke="#E7F0EA" stroke-width="3" stroke-linecap="round" opacity="0.75"/>
+  <circle cx="64" cy="68" r="13" stroke="#E7F0EA" stroke-width="3" opacity="0.75"/>
+  <path d="M45 83C51.2 87.8 57.5 90.9 64 93.2C70.5 90.9 76.8 87.8 83 83" stroke="#D8A735" stroke-width="4" stroke-linecap="round"/>
+  <path d="M38.5 45.8H50.3V81.5H68.9V92.2H38.5V45.8Z" fill="#F7FBF8"/>
+  <path d="M70.6 45.8H107V54.2L87.3 81.7H107.9V92.2H69.8V83.9L89.6 56.3H70.6V45.8Z" fill="#F7FBF8"/>
+  <path d="M95.2 20.5L98 26.4L104.5 27.2L99.7 31.7L100.9 38.1L95.2 35L89.5 38.1L90.7 31.7L85.9 27.2L92.4 26.4L95.2 20.5Z" fill="#D8A735"/>
+</svg>
