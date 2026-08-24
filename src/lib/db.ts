@@ -1,18 +1,76 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
+import { dirname, join } from 'node:path';
 import { Pool, type QueryResultRow } from 'pg';
 import { type Match, type MatchEntry, type Player } from './types';
 
 /**
  * Veri katmanı.
  *
- * Vercel Supabase entegrasyonu `POSTGRES_URL` sağladığında Supabase Postgres
- * kullanılır. Local geliştirmede env yoksa `data/local-db.json` dosyasına düşer.
+ * Bağlantı dizesi env'de varsa Postgres kullanılır. Supabase / Neon / Vercel
+ * Postgres entegrasyonları değişkene farklı isimler verebildiği için hepsine
+ * bakıyoruz. Local geliştirmede hiçbiri yoksa `data/local-db.json` dosyasına
+ * düşer; Vercel'de dosya sistemi salt okunur olduğu için orada sessizce
+ * fallback'e düşmek yerine açık hata veriyoruz.
  */
 
-const hasPostgres = Boolean(process.env.POSTGRES_URL);
+/**
+ * Barındırma entegrasyonlarının kullandığı bağlantı env isimleri, öncelik sırasıyla.
+ * Neon/Supabase entegrasyonu bir önek seçildiğinde bu isimleri `Voetball_POSTGRES_URL`
+ * gibi öneklendirdiği için son ekten de eşleştiriyoruz.
+ */
+const CONNECTION_ENV_KEYS = [
+  'POSTGRES_URL',
+  'DATABASE_URL',
+  'POSTGRES_URL_NON_POOLING',
+  'DATABASE_URL_UNPOOLED',
+  'POSTGRES_PRISMA_URL',
+  'SUPABASE_DB_URL',
+] as const;
 
-export const usingPostgres = hasPostgres;
+/** Boş ya da yer tutucu değerleri elemek için: gerçek bir Postgres URL'i mi? */
+function isPostgresUrl(value: string | undefined): value is string {
+  if (!value) return false;
+  return /^postgres(ql)?:\/\/[^\s]+$/i.test(value.trim());
+}
+
+/**
+ * Env runtime'da okunur; modül yüklenirken sabitlenmez.
+ * Önce tam isim eşleşmesi, sonra öneklendirilmiş varyantlar denenir.
+ */
+function connectionUrl(): string | undefined {
+  for (const key of CONNECTION_ENV_KEYS) {
+    const value = process.env[key]?.trim();
+    if (isPostgresUrl(value)) return value;
+  }
+
+  for (const suffix of CONNECTION_ENV_KEYS) {
+    for (const [key, raw] of Object.entries(process.env)) {
+      if (!key.endsWith(suffix)) continue;
+      const value = raw?.trim();
+      if (isPostgresUrl(value)) return value;
+    }
+  }
+
+  return undefined;
+}
+
+function hasPostgres(): boolean {
+  return Boolean(connectionUrl());
+}
+
+export function usingPostgres(): boolean {
+  return hasPostgres();
+}
+
+function missingDbMessage(): string {
+  return (
+    'Geçerli bir Postgres bağlantısı bulunamadı. Vercel → Settings → Environment Variables ' +
+    `altında şu isimlerden biri (ya da önekli hali) postgres:// ile başlayan bir değer ` +
+    `içermeli: ${CONNECTION_ENV_KEYS.join(', ')}. ` +
+    'Değişkeni düzelttikten sonra projeyi yeniden deploy et.'
+  );
+}
 
 declare global {
   // eslint-disable-next-line no-var
@@ -35,10 +93,11 @@ interface MatchRow {
 }
 
 function pool(): Pool {
-  if (!process.env.POSTGRES_URL) throw new Error('POSTGRES_URL tanımlı değil.');
+  const url = connectionUrl();
+  if (!url) throw new Error(missingDbMessage());
 
   globalThis.voetbalPool ??= new Pool({
-    connectionString: process.env.POSTGRES_URL,
+    connectionString: url,
     ssl: { rejectUnauthorized: false },
   });
 
@@ -46,7 +105,7 @@ function pool(): Pool {
 }
 
 async function ensureSchema(): Promise<void> {
-  if (!hasPostgres) return;
+  if (!hasPostgres()) return;
 
   globalThis.voetbalSchemaReady ??= pool().query(`
     create table if not exists players (
@@ -102,9 +161,17 @@ interface LocalDb {
   matches: Match[];
 }
 
-const LOCAL_FILE = 'data/local-db.json';
+const LOCAL_FILE = join(process.cwd(), 'data', 'local-db.json');
+
+/** Vercel/Lambda'da dosya sistemi salt okunur — JSON fallback orada geçersiz. */
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+function assertLocalAllowed(): void {
+  if (isServerless) throw new Error(missingDbMessage());
+}
 
 async function readLocal(): Promise<LocalDb> {
+  assertLocalAllowed();
   const { readFile } = await import('node:fs/promises');
   try {
     const raw = await readFile(LOCAL_FILE, 'utf8');
@@ -119,8 +186,9 @@ async function readLocal(): Promise<LocalDb> {
 }
 
 async function writeLocal(db: LocalDb): Promise<void> {
+  assertLocalAllowed();
   const { mkdir, writeFile } = await import('node:fs/promises');
-  await mkdir('data', { recursive: true });
+  await mkdir(dirname(LOCAL_FILE), { recursive: true });
   await writeFile(LOCAL_FILE, JSON.stringify(db, null, 2), 'utf8');
 }
 
@@ -129,7 +197,7 @@ async function writeLocal(db: LocalDb): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export async function getPlayers(): Promise<Player[]> {
-  if (hasPostgres) {
+  if (hasPostgres()) {
     const rows = await query<PlayerRow>('select id, name, created_at from players order by name');
     return rows.map(toPlayer).sort((a, b) => a.name.localeCompare(b.name, 'tr'));
   }
@@ -140,7 +208,7 @@ export async function getPlayers(): Promise<Player[]> {
 
 export async function createPlayer(name: string): Promise<Player> {
   const player: Player = { id: randomUUID(), name, createdAt: Date.now() };
-  if (hasPostgres) {
+  if (hasPostgres()) {
     await query(
       'insert into players (id, name, created_at) values ($1, $2, $3)',
       [player.id, player.name, player.createdAt],
@@ -155,7 +223,7 @@ export async function createPlayer(name: string): Promise<Player> {
 }
 
 export async function renamePlayer(id: string, name: string): Promise<void> {
-  if (hasPostgres) {
+  if (hasPostgres()) {
     await query('update players set name = $2 where id = $1', [id, name]);
     return;
   }
@@ -167,7 +235,7 @@ export async function renamePlayer(id: string, name: string): Promise<void> {
 }
 
 export async function deletePlayer(id: string): Promise<void> {
-  if (hasPostgres) {
+  if (hasPostgres()) {
     await query('delete from players where id = $1', [id]);
     return;
   }
@@ -182,7 +250,7 @@ export async function deletePlayer(id: string): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export async function getMatches(): Promise<Match[]> {
-  if (hasPostgres) {
+  if (hasPostgres()) {
     const rows = await query<MatchRow>(
       'select id, date, entries, created_at from matches order by date desc, created_at desc',
     );
@@ -194,7 +262,7 @@ export async function getMatches(): Promise<Match[]> {
 }
 
 export async function getMatch(id: string): Promise<Match | null> {
-  if (hasPostgres) {
+  if (hasPostgres()) {
     const rows = await query<MatchRow>(
       'select id, date, entries, created_at from matches where id = $1 limit 1',
       [id],
@@ -208,7 +276,7 @@ export async function getMatch(id: string): Promise<Match | null> {
 
 export async function createMatch(date: string, entries: MatchEntry[]): Promise<Match> {
   const match: Match = { id: randomUUID(), date, entries, createdAt: Date.now() };
-  if (hasPostgres) {
+  if (hasPostgres()) {
     await query(
       'insert into matches (id, date, entries, created_at) values ($1, $2, $3::jsonb, $4)',
       [match.id, match.date, JSON.stringify(match.entries), match.createdAt],
@@ -223,7 +291,7 @@ export async function createMatch(date: string, entries: MatchEntry[]): Promise<
 }
 
 export async function updateMatch(id: string, date: string, entries: MatchEntry[]): Promise<void> {
-  if (hasPostgres) {
+  if (hasPostgres()) {
     await query('update matches set date = $2, entries = $3::jsonb where id = $1', [
       id,
       date,
@@ -242,7 +310,7 @@ export async function updateMatch(id: string, date: string, entries: MatchEntry[
 }
 
 export async function deleteMatch(id: string): Promise<void> {
-  if (hasPostgres) {
+  if (hasPostgres()) {
     await query('delete from matches where id = $1', [id]);
     return;
   }

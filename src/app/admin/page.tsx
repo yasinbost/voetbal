@@ -39,8 +39,8 @@ export default async function AdminPage() {
 
       {admin && (
         <p className="footer-note">
-          {usingPostgres ? (
-            <>Veriler Supabase Postgres içinde tutuluyor.</>
+          {usingPostgres() ? (
+            <>Veriler Postgres veritabanında tutuluyor.</>
           ) : (
             <>
               Veriler yerel <code>data/local-db.json</code> dosyasında tutuluyor.

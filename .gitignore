@@ -9,3 +9,5 @@ data/local-db.json
 .DS_Store
 next-env.d.ts
 .vercel
+.env*
+tsconfig.tsbuildinfo
