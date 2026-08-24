@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { endSession, checkPassword, requireAdmin, startSession } from '@/lib/auth';
 import * as db from '@/lib/db';
-import { type ActionState } from '@/lib/action-state';
-import type { MatchEntry, MatchResult } from '@/lib/types';
+import { type ActionState, type MotmVoteState } from '@/lib/action-state';
+import { isPollOpen } from '@/lib/motm';
+import type { MatchEntry, MatchResult, VoteTally } from '@/lib/types';
 
 function fail(message: string): ActionState {
   return { ok: false, message };
@@ -14,13 +15,16 @@ function done(message: string): ActionState {
   return { ok: true, message };
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Beklenmeyen bir hata oluştu.';
+}
+
 /** Server action'ları tek tip hata mesajıyla sarmalar. */
 async function run(fn: () => Promise<ActionState>): Promise<ActionState> {
   try {
     return await fn();
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Beklenmeyen bir hata oluştu.';
-    return fail(message);
+    return fail(errorMessage(error));
   }
 }
 
@@ -170,4 +174,64 @@ export async function deleteMatchAction(
     revalidatePath('/admin');
     return done('Maç silindi. İstatistikler yeniden hesaplandı.');
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Macin adami anketi (herkese acik)                                   */
+/* ------------------------------------------------------------------ */
+
+/** Tarayıcıda üretilen oy kimliği; çöp veriyi kapıda eler. */
+const VOTER_ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+/**
+ * Maçın adamı oyu. Admin gerektirmez; tek koruma tarayıcı başına üretilen
+ * `voterId` ve veritabanındaki (match_id, voter_id) birincil anahtarı.
+ */
+export async function voteMotmAction(
+  _prev: MotmVoteState,
+  formData: FormData,
+): Promise<MotmVoteState> {
+  try {
+    const matchId = String(formData.get('matchId') ?? '');
+    const playerId = String(formData.get('playerId') ?? '');
+    const voterId = String(formData.get('voterId') ?? '');
+
+    if (!playerId) return fail('Önce bir oyuncu seç.');
+    if (!VOTER_ID.test(voterId)) return fail('Oy kimliği geçersiz. Sayfayı yenileyip tekrar dene.');
+
+    const match = await db.getMatch(matchId);
+    if (!match) return fail('Maç bulunamadı.');
+    if (!isPollOpen(match, Date.now())) return fail('Anket kapandı.');
+    if (!match.entries.some((e) => e.playerId === playerId)) {
+      return fail('Bu oyuncu maçta oynamamış.');
+    }
+
+    const saved = await db.addVote(matchId, playerId, voterId);
+    const tallies = await db.getMatchTallies(matchId);
+
+    if (!saved) {
+      return { ok: false, message: 'Bu tarayıcıdan zaten oy kullanılmış.', tallies };
+    }
+
+    revalidatePath('/');
+    return { ok: true, message: 'Oyun kaydedildi.', tallies };
+  } catch (error) {
+    return fail(errorMessage(error));
+  }
+}
+
+/**
+ * Oy dağılımı. Yalnızca oyunu kullanmış tarayıcıya ya da anket kapandıysa
+ * herkese açılır; oy vermeden sonucu görmek mümkün değil.
+ */
+export async function motmTalliesAction(matchId: string, voterId: string): Promise<VoteTally[]> {
+  if (!matchId || !VOTER_ID.test(voterId)) return [];
+
+  const match = await db.getMatch(matchId);
+  if (!match) return [];
+
+  const open = isPollOpen(match, Date.now());
+  if (open && !(await db.hasVoted(matchId, voterId))) return [];
+
+  return db.getMatchTallies(matchId);
 }

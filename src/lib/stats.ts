@@ -1,4 +1,11 @@
-import { PARTICIPATION_POINT, POINTS, type Match, type Player, type PlayerStats } from './types';
+import {
+  MOTM_POINT,
+  PARTICIPATION_POINT,
+  POINTS,
+  type Match,
+  type Player,
+  type PlayerStats,
+} from './types';
 
 /**
  * Tüm istatistikler maç kayıtlarından anında hesaplanır; hiçbir yerde
@@ -7,8 +14,16 @@ import { PARTICIPATION_POINT, POINTS, type Match, type Player, type PlayerStats 
  *
  * Puanlama: maça katılan herkes sonuçtan bağımsız +1 alır, üstüne sonuç
  * puanı eklenir. Net karşılık: galibiyet 3, beraberlik 2, mağlubiyet 1.
+ *
+ * `motmWinners` verilirse (anketi kapanmış maçların kazananları) her kazanana
+ * ayrıca maçın adamı puanı eklenir. Anketi açık maçlar buraya girmediği için
+ * oylama sürerken tablo oynamaz.
  */
-export function computeStats(players: Player[], matches: Match[]): PlayerStats[] {
+export function computeStats(
+  players: Player[],
+  matches: Match[],
+  motmWinners?: ReadonlyMap<string, string[]>,
+): PlayerStats[] {
   const totalMatches = matches.length;
 
   const stats = new Map<string, PlayerStats>(
@@ -38,6 +53,11 @@ export function computeStats(players: Player[], matches: Match[]): PlayerStats[]
       if (entry.result === 'win') s.wins += 1;
       else if (entry.result === 'draw') s.draws += 1;
       else s.losses += 1;
+    }
+
+    for (const winnerId of motmWinners?.get(match.id) ?? []) {
+      const s = stats.get(winnerId);
+      if (s) s.points += MOTM_POINT;
     }
   }
 

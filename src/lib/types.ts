@@ -19,6 +19,22 @@ export interface Match {
   createdAt: number;
 }
 
+/** Maçın adamı anketine verilmiş tek bir oy. */
+export interface Vote {
+  matchId: string;
+  playerId: string;
+  /** Tarayıcıda üretilip localStorage'da saklanan kimlik. */
+  voterId: string;
+  createdAt: number;
+}
+
+/** Bir maçtaki oy dağılımının tek satırı. */
+export interface VoteTally {
+  matchId: string;
+  playerId: string;
+  votes: number;
+}
+
 export interface PlayerStats {
   playerId: string;
   name: string;
@@ -42,3 +58,9 @@ export const POINTS: Record<MatchResult, number> = {
 
 /** Maça katılan herkes sonuçtan bağımsız olarak bunu da alır. */
 export const PARTICIPATION_POINT = 1;
+
+/** Anket kapandığında maçın adamı seçilenlere eklenir. */
+export const MOTM_POINT = 1;
+
+/** Maçın adamı anketi, maç kaydedildikten bu süre sonra kapanır. */
+export const POLL_WINDOW_MS = 3 * 60 * 60 * 1000;

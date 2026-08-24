@@ -2,7 +2,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { Pool, type QueryResultRow } from 'pg';
-import { type Match, type MatchEntry, type Player } from './types';
+import { type Match, type MatchEntry, type Player, type Vote, type VoteTally } from './types';
 
 /**
  * Veri katmanı.
@@ -92,6 +92,12 @@ interface MatchRow {
   created_at: string | number;
 }
 
+interface TallyRow {
+  match_id: string;
+  player_id: string;
+  votes: string | number;
+}
+
 function pool(): Pool {
   const url = connectionUrl();
   if (!url) throw new Error(missingDbMessage());
@@ -120,6 +126,14 @@ async function ensureSchema(): Promise<void> {
       entries jsonb not null,
       created_at bigint not null
     );
+
+    create table if not exists votes (
+      match_id uuid not null,
+      voter_id text not null,
+      player_id uuid not null,
+      created_at bigint not null,
+      primary key (match_id, voter_id)
+    );
   `).then(() => undefined);
 
   await globalThis.voetbalSchemaReady;
@@ -129,6 +143,13 @@ async function query<T extends QueryResultRow>(text: string, values: unknown[] =
   await ensureSchema();
   const result = await pool().query<T>(text, values);
   return result.rows;
+}
+
+/** Satır döndürmeyen sorgular için; etkilenen satır sayısını verir. */
+async function execute(text: string, values: unknown[] = []): Promise<number> {
+  await ensureSchema();
+  const result = await pool().query(text, values);
+  return result.rowCount ?? 0;
 }
 
 function toPlayer(row: PlayerRow): Player {
@@ -152,6 +173,28 @@ function toMatch(row: MatchRow): Match {
   };
 }
 
+function toTally(row: TallyRow): VoteTally {
+  return {
+    matchId: row.match_id,
+    playerId: row.player_id,
+    votes: Number(row.votes),
+  };
+}
+
+/** Yerel JSON tarafında oyları maç/oyuncu bazında sayar. */
+function tallyVotes(votes: Vote[]): VoteTally[] {
+  const counts = new Map<string, VoteTally>();
+
+  for (const vote of votes) {
+    const key = `${vote.matchId}::${vote.playerId}`;
+    const current = counts.get(key);
+    if (current) current.votes += 1;
+    else counts.set(key, { matchId: vote.matchId, playerId: vote.playerId, votes: 1 });
+  }
+
+  return [...counts.values()];
+}
+
 /* ------------------------------------------------------------------ */
 /* Yerel JSON                                                          */
 /* ------------------------------------------------------------------ */
@@ -159,6 +202,7 @@ function toMatch(row: MatchRow): Match {
 interface LocalDb {
   players: Player[];
   matches: Match[];
+  votes: Vote[];
 }
 
 const LOCAL_FILE = join(process.cwd(), 'data', 'local-db.json');
@@ -179,9 +223,10 @@ async function readLocal(): Promise<LocalDb> {
     return {
       players: parsed.players ?? [],
       matches: parsed.matches ?? [],
+      votes: parsed.votes ?? [],
     };
   } catch {
-    return { players: [], matches: [] };
+    return { players: [], matches: [], votes: [] };
   }
 }
 
@@ -236,12 +281,14 @@ export async function renamePlayer(id: string, name: string): Promise<void> {
 
 export async function deletePlayer(id: string): Promise<void> {
   if (hasPostgres()) {
+    await query('delete from votes where player_id = $1', [id]);
     await query('delete from players where id = $1', [id]);
     return;
   }
 
   const db = await readLocal();
   db.players = db.players.filter((p) => p.id !== id);
+  db.votes = db.votes.filter((v) => v.playerId !== id);
   await writeLocal(db);
 }
 
@@ -311,11 +358,85 @@ export async function updateMatch(id: string, date: string, entries: MatchEntry[
 
 export async function deleteMatch(id: string): Promise<void> {
   if (hasPostgres()) {
+    await query('delete from votes where match_id = $1', [id]);
     await query('delete from matches where id = $1', [id]);
     return;
   }
 
   const db = await readLocal();
   db.matches = db.matches.filter((m) => m.id !== id);
+  db.votes = db.votes.filter((v) => v.matchId !== id);
   await writeLocal(db);
+}
+
+/* ------------------------------------------------------------------ */
+/* Macin adami oylari                                                  */
+/* ------------------------------------------------------------------ */
+
+/** Tüm maçların oy dağılımı; puan hesabı ve anket sonucu bundan çıkar. */
+export async function getVoteTallies(): Promise<VoteTally[]> {
+  if (hasPostgres()) {
+    const rows = await query<TallyRow>(
+      'select match_id, player_id, count(*)::int as votes from votes group by match_id, player_id',
+    );
+    return rows.map(toTally);
+  }
+
+  const db = await readLocal();
+  return tallyVotes(db.votes);
+}
+
+/** Tek bir maçın oy dağılımı. */
+export async function getMatchTallies(matchId: string): Promise<VoteTally[]> {
+  if (hasPostgres()) {
+    const rows = await query<TallyRow>(
+      'select match_id, player_id, count(*)::int as votes from votes where match_id = $1 group by match_id, player_id',
+      [matchId],
+    );
+    return rows.map(toTally);
+  }
+
+  const db = await readLocal();
+  return tallyVotes(db.votes.filter((v) => v.matchId === matchId));
+}
+
+/** Bu tarayıcı bu maça oy kullanmış mı? Dağılımı yalnızca oy verene göstermek için. */
+export async function hasVoted(matchId: string, voterId: string): Promise<boolean> {
+  if (hasPostgres()) {
+    const rows = await query<{ exists: boolean }>(
+      'select true as exists from votes where match_id = $1 and voter_id = $2 limit 1',
+      [matchId, voterId],
+    );
+    return rows.length > 0;
+  }
+
+  const db = await readLocal();
+  return db.votes.some((v) => v.matchId === matchId && v.voterId === voterId);
+}
+
+/**
+ * Oyu kaydeder. Aynı tarayıcı (voterId) aynı maça ikinci kez oy veremez;
+ * kilit veritabanı tarafında `votes` birincil anahtarıyla sağlanır.
+ *
+ * @returns Oy kaydedildiyse true, bu tarayıcı zaten oy kullandıysa false.
+ */
+export async function addVote(matchId: string, playerId: string, voterId: string): Promise<boolean> {
+  const createdAt = Date.now();
+
+  if (hasPostgres()) {
+    const inserted = await execute(
+      `insert into votes (match_id, voter_id, player_id, created_at)
+       values ($1, $2, $3, $4)
+       on conflict (match_id, voter_id) do nothing`,
+      [matchId, voterId, playerId, createdAt],
+    );
+    return inserted > 0;
+  }
+
+  const db = await readLocal();
+  if (db.votes.some((v) => v.matchId === matchId && v.voterId === voterId)) return false;
+
+  db.votes.push({ matchId, playerId, voterId, createdAt });
+  await writeLocal(db);
+  return true;
 }

@@ -1,14 +1,39 @@
 import Link from 'next/link';
 import Leaderboard from '@/components/Leaderboard';
-import { getMatches, getPlayers } from '@/lib/db';
+import MotmPoll, { type Candidate } from '@/components/MotmPoll';
+import { getMatches, getPlayers, getVoteTallies } from '@/lib/db';
+import { isPollOpen, latestMatch, motmWinnersByMatch, pollClosesAt } from '@/lib/motm';
 import { computeStats, formatDate } from '@/lib/stats';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const [players, matches] = await Promise.all([getPlayers(), getMatches()]);
-  const stats = computeStats(players, matches);
+  const [players, matches, tallies] = await Promise.all([
+    getPlayers(),
+    getMatches(),
+    getVoteTallies(),
+  ]);
+
+  const now = Date.now();
+  // Puana yalnızca anketi kapanmış maçların kazananları girer.
+  const motmWinners = motmWinnersByMatch(matches, tallies, now);
+  const stats = computeStats(players, matches, motmWinners);
   const lastMatch = matches[0];
+
+  // Anket, tarihi en yeni maça değil, en son kaydedilen maça bağlıdır.
+  const pollMatch = latestMatch(matches);
+  const playerName = (id: string) => players.find((p) => p.id === id)?.name;
+  const candidates: Candidate[] = (pollMatch?.entries ?? []).flatMap((entry) => {
+    const name = playerName(entry.playerId);
+    return name ? [{ id: entry.playerId, name }] : [];
+  });
+  const pollOpen = pollMatch ? isPollOpen(pollMatch, now) : false;
+  const motmNames = pollMatch
+    ? (motmWinners.get(pollMatch.id) ?? []).flatMap((id) => {
+        const name = playerName(id);
+        return name ? [name] : [];
+      })
+    : [];
   const activePlayers = stats.filter((s) => s.played > 0).length;
   const leader = [...stats].sort(
     (a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name, 'tr'),
@@ -48,6 +73,36 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      {pollMatch && candidates.length > 0 && (
+        pollOpen ? (
+          <MotmPoll
+            matchId={pollMatch.id}
+            candidates={candidates}
+            closesAt={pollClosesAt(pollMatch)}
+          />
+        ) : (
+          <div className="card poll-card">
+            <div className="card-head">
+              <h2>Maçın Adamı</h2>
+              <p>{formatDate(pollMatch.date)} maçı</p>
+            </div>
+            <div className="card-body">
+              {motmNames.length > 0 ? (
+                <>
+                  <p className="motm-winner">🏅 {motmNames.join(', ')}</p>
+                  <p className="hint">
+                    Anket kapandı; {motmNames.length > 1 ? 'eşit oy alanların her birine' : 'kazanana'}{' '}
+                    +1 puan eklendi.
+                  </p>
+                </>
+              ) : (
+                <p className="hint">Bu maçta oy kullanılmadı, maçın adamı seçilmedi.</p>
+              )}
+            </div>
+          </div>
+        )
+      )}
+
       {players.length === 0 || matches.length === 0 ? (
         <div className="card">
           <div className="empty">
@@ -62,7 +117,7 @@ export default async function DashboardPage() {
       )}
 
       <p className="footer-note">
-        Katılım +1 • Galibiyet +2 • Beraberlik +1 — yani maça çıkan herkes en az 1 puan alır.
+        Katılım +1 • Galibiyet +2 • Beraberlik +1 • Maçın adamı +1 — maça çıkan herkes en az 1 puan alır.
         <br />
         Tüm istatistikler maç kayıtlarından anlık hesaplanır.
       </p>
