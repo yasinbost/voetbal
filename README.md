@@ -6,8 +6,26 @@ Haftalık halısaha maçlarının **kişi bazlı** puan tablosunu tutan küçük
 - **Admin paneli** tek bir şifreyle korunuyor (`ADMIN_PASSWORD`).
 - Puanlama: maça **katılan herkese +1**, üstüne sonuç puanı (**galibiyet +2 • beraberlik +1 • mağlubiyet +0**).
   Net karşılık: **galibiyet 3 • beraberlik 2 • mağlubiyet 1**.
+- **Maçın adamı** anketini kazanan ayrıca **+1** alır.
 - Tüm istatistikler maç kayıtlarından **anlık hesaplanır** — hiçbir yerde ayrıca
   saklanmaz, dolayısıyla bir maçı silmek/düzenlemek tabloyu kendiliğinden düzeltir.
+
+## Maçın adamı anketi
+
+Bir maç kaydedildiği anda ana ekranda o maçın oyuncuları için anket açılır.
+
+- Anket, maç **kaydedildikten 3 saat** sonra kapanır (`POLL_WINDOW_MS`). Maçın tarihi değil,
+  kaydın oluşturulma zamanı esastır; anket maçı da her zaman **en son kaydedilen** maçtır.
+- **Tarayıcı başına bir oy.** Tarayıcıda `localStorage` içinde bir kimlik üretilir, oy onunla
+  atılır; asıl kilit veritabanındaki `votes(match_id, voter_id)` birincil anahtarıdır.
+  Tarayıcı verisini temizleyen ya da gizli sekme açan tekrar oy verebilir — arkadaş ligi için
+  bilinçli tercih, kimlik doğrulama yok.
+- Oy sayıları yalnızca **oyunu kullanmış** tarayıcıya (anket kapandıysa herkese) görünür;
+  dağılım sayfa HTML'ine gömülmez.
+- Anket kapanınca en çok oyu alan **+1 puan** alır. **Eşitlikte hepsi** kazanır ve her biri +1 alır;
+  hiç oy yoksa maçın adamı seçilmez. Puan yalnızca anket kapandıktan sonra işlenir, oylama
+  sürerken tablo oynamaz.
+- Kapanan anketin sonucu **yeni bir maç kaydedilene kadar** dashboard'da durur.
 
 ## Teknoloji
 
@@ -96,10 +114,12 @@ src/
     Leaderboard.tsx     İki sekmeli tablo, ilk 3 madalyalı
     AdminPanel.tsx      Maç Ekle / Oyuncular / Geçmiş sekmeleri
     MatchForm.tsx       Maç ekleme + düzenleme
+    MotmPoll.tsx        Maçın adamı anketi (oy formu + dağılım)
     MatchHistory.tsx    Maç listesi, düzenle/sil
     PlayerManager.tsx   Oyuncu ekle/düzenle/sil
   lib/
-    db.ts               Supabase Postgres + yerel JSON fallback veri katmanı
+    db.ts               Postgres + yerel JSON fallback veri katmanı
+    motm.ts             Maçın adamı: anket penceresi ve kazanan hesabı
     stats.ts            İstatistik hesabı ve sıralama
     auth.ts             Tek şifreli oturum (httpOnly cookie)
     types.ts            Veri modeli
