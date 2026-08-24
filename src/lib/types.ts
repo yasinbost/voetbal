@@ -39,3 +39,6 @@ export const POINTS: Record<MatchResult, number> = {
   draw: 1,
   lose: 0,
 };
+
+/** Maça katılan herkes sonuçtan bağımsız olarak bunu da alır. */
+export const PARTICIPATION_POINT = 1;

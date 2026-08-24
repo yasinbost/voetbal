@@ -1,9 +1,12 @@
-import { POINTS, type Match, type Player, type PlayerStats } from './types';
+import { PARTICIPATION_POINT, POINTS, type Match, type Player, type PlayerStats } from './types';
 
 /**
  * Tüm istatistikler maç kayıtlarından anında hesaplanır; hiçbir yerde
  * ayrıca saklanmaz. Böylece maç silinince/düzenlenince tablo kendiliğinden
  * doğru kalır.
+ *
+ * Puanlama: maça katılan herkes sonuçtan bağımsız +1 alır, üstüne sonuç
+ * puanı eklenir. Net karşılık: galibiyet 3, beraberlik 2, mağlubiyet 1.
  */
 export function computeStats(players: Player[], matches: Match[]): PlayerStats[] {
   const totalMatches = matches.length;
@@ -31,7 +34,7 @@ export function computeStats(players: Player[], matches: Match[]): PlayerStats[]
       const s = stats.get(entry.playerId);
       if (!s) continue; // silinmiş oyuncu
       s.played += 1;
-      s.points += POINTS[entry.result];
+      s.points += PARTICIPATION_POINT + POINTS[entry.result];
       if (entry.result === 'win') s.wins += 1;
       else if (entry.result === 'draw') s.draws += 1;
       else s.losses += 1;
