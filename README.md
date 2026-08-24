@@ -13,7 +13,7 @@ Haftalık halısaha maçlarının **kişi bazlı** puan tablosunu tutan küçük
 | Katman | Tercih | Neden |
 | --- | --- | --- |
 | Uygulama | Next.js 15 (App Router, TypeScript) | Tek proje: hem arayüz hem sunucu |
-| Veri | Supabase Postgres (`POSTGRES_URL`) | Vercel'de kalıcı veri, düşük kurulum yükü |
+| Veri | Vercel Storage üzerinden Postgres (Neon/Supabase) | Vercel'de kalıcı veri, düşük kurulum yükü |
 | Yazma işlemleri | Server Actions | Şifre ve veri yazma işlemleri tarayıcıya inmez |
 | Barındırma | Vercel | GitHub bağlantısıyla otomatik deploy |
 | Stil | Elle yazılmış CSS | Ekstra bağımlılık yok |
@@ -41,14 +41,21 @@ git push -u origin main
 ```
 
 1. Vercel'de projeyi GitHub reposundan import et.
-2. Vercel Marketplace'ten **Supabase** entegrasyonunu ekle ve projeye bağla.
-3. Supabase entegrasyonu `POSTGRES_URL` dahil gerekli env değişkenlerini Vercel'e otomatik
-   ekler.
+2. Vercel → Storage'tan bir Postgres (Neon ya da Supabase) veritabanı oluştur ve projeye bağla.
+3. Entegrasyon `POSTGRES_URL` / `DATABASE_URL` gibi env değişkenlerini otomatik ekler.
+   Veritabanını bir **önekle** oluşturduysan (ör. `Voetball_POSTGRES_URL`) sorun değil:
+   [src/lib/db.ts](src/lib/db.ts) önekli isimleri de tanır ve `postgres://` ile başlamayan
+   boş/yer tutucu değerleri atlar.
 4. Vercel Project Settings → Environment Variables altında `ADMIN_PASSWORD` ekle.
-5. Deploy et.
+5. Deploy et. **Env değişkenlerini sonradan eklediysen yeniden deploy şart** — eski
+   deployment yeni env'leri almaz.
 
-Uygulama ilk açıldığında Supabase içinde `players` ve `matches` tablolarını otomatik
-oluşturur. Supabase SQL Editor'da elle tablo oluşturman gerekmez.
+Uygulama ilk açıldığında `players` ve `matches` tablolarını otomatik oluşturur; SQL
+Editor'da elle tablo açman gerekmez.
+
+Vercel'de geçerli bir bağlantı bulunamazsa uygulama yerel JSON dosyasına düşmez (sunucunun
+dosya sistemi salt okunur); bunun yerine hangi env değişkeninin eksik olduğunu söyleyen
+açık bir hata gösterir.
 
 Şifreyi değiştirmek için Vercel'de `ADMIN_PASSWORD` değerini güncelleyip yeniden deploy
 etmen yeterli. Env tanımlı değilse kod içindeki `FALLBACK_PASSWORD` sabiti kullanılır;
@@ -64,7 +71,7 @@ npx vercel env pull .env.local
 npm run dev
 ```
 
-`POSTGRES_URL` varsa localde de Supabase kullanılır; yoksa local JSON fallback devreye girer.
+Geçerli bir bağlantı dizesi varsa localde de Postgres kullanılır; yoksa local JSON fallback devreye girer.
 
 ## Telefona ekleme (PWA)
 
