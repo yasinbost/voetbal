@@ -51,8 +51,8 @@ export interface PlayerStats {
 }
 
 export const POINTS: Record<MatchResult, number> = {
-  win: 2,
-  draw: 1,
+  win: 1,
+  draw: 0,
   lose: 0,
 };
 

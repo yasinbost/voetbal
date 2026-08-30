@@ -117,7 +117,7 @@ export default async function DashboardPage() {
       )}
 
       <p className="footer-note">
-        Katılım +1 • Galibiyet +2 • Beraberlik +1 • Maçın adamı +1 — maça çıkan herkes en az 1 puan alır.
+        Katılım +1 • Galibiyet +1 • Maçın adamı +1 — maça çıkan herkes en az 1 puan alır.
         <br />
         Tüm istatistikler maç kayıtlarından anlık hesaplanır.
       </p>

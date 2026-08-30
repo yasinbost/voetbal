@@ -4,8 +4,8 @@ Haftalık halısaha maçlarının **kişi bazlı** puan tablosunu tutan küçük
 
 - **Dashboard** herkese açık, şifresiz.
 - **Admin paneli** tek bir şifreyle korunuyor (`ADMIN_PASSWORD`).
-- Puanlama: maça **katılan herkese +1**, üstüne sonuç puanı (**galibiyet +2 • beraberlik +1 • mağlubiyet +0**).
-  Net karşılık: **galibiyet 3 • beraberlik 2 • mağlubiyet 1**.
+- Puanlama: maça **katılan herkese +1**, üstüne sonuç puanı (**galibiyet +1 • beraberlik +0 • mağlubiyet +0**).
+  Net karşılık: **galibiyet 2 • beraberlik 1 • mağlubiyet 1**.
 - **Maçın adamı** anketini kazanan ayrıca **+1** alır.
 - Tüm istatistikler maç kayıtlarından **anlık hesaplanır** — hiçbir yerde ayrıca
   saklanmaz, dolayısıyla bir maçı silmek/düzenlemek tabloyu kendiliğinden düzeltir.

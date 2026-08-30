@@ -13,7 +13,7 @@ import {
  * doğru kalır.
  *
  * Puanlama: maça katılan herkes sonuçtan bağımsız +1 alır, üstüne sonuç
- * puanı eklenir. Net karşılık: galibiyet 3, beraberlik 2, mağlubiyet 1.
+ * puanı eklenir. Net karşılık: galibiyet 2, beraberlik 1, mağlubiyet 1.
  *
  * `motmWinners` verilirse (anketi kapanmış maçların kazananları) her kazanana
  * ayrıca maçın adamı puanı eklenir. Anketi açık maçlar buraya girmediği için
