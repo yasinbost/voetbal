@@ -17,11 +17,11 @@ any ADR that revisits this.
 | `src/lib/db.ts` | Persistence: Postgres when configured, local JSON otherwise; env-name resolution for prefixed connection strings. | `players`, `matches`, `votes` storage and the read/write functions over them. |
 | `src/lib/types.ts` | Shared data model and scoring constants. | `Player`, `Match`, `MatchEntry`, `Vote`, `VoteTally`, `PlayerStats`, `POINTS`/`PARTICIPATION_POINT`/`MOTM_POINT`/`POLL_WINDOW_MS`. |
 | `src/lib/stats.ts` | Turning raw players/matches (+ resolved MOTM winners) into ranked `PlayerStats`. | Scoring math, both sort orders, display formatting (`formatAverage`, `formatAttendance`, `formatDate`). |
-| `src/lib/motm.ts` | Poll timing and winner resolution. | `pollClosesAt`, `isPollOpen`, `winnersOf`, `motmWinnersByMatch`, `latestMatch`. |
+| `src/lib/motm.ts` | Poll timing, winner resolution and the vote-distribution table. | `pollClosesAt`, `isPollOpen`, `winnersOf`, `motmWinnersByMatch`, `latestMatch`, `pollResultRows` (rows/total counting only match participants). |
 | `src/lib/auth.ts` | Single-password admin session. | Password check, session cookie issue/verify, `requireAdmin()` guard. |
 | `src/app/actions.ts` | All Server Actions (the only place writes happen). | Input validation, calling `db`/`auth`/`motm`, `revalidatePath`, uniform `ActionState` results. |
 | `src/app/page.tsx`, `src/app/admin/page.tsx` | Server-rendered pages; assemble data for the components below. | Route-level data fetching and MOTM/poll display wiring. |
-| `src/components/*` | Presentation + client-side form state (`useActionState`) for one concern each (`Leaderboard`, `AdminPanel`, `MatchForm`, `MotmPoll`, `MatchHistory`, `PlayerManager`). | Their own markup/CSS classes; no direct DB access. |
+| `src/components/*` | Presentation + client-side form state (`useActionState`) for one concern each (`Leaderboard`, `AdminPanel`, `MatchForm`, `MotmPoll`, `MotmResults` (shared vote-distribution list, server- and client-renderable), `MatchHistory`, `PlayerManager`). | Their own markup/CSS classes; no direct DB access. |
 
 ## Communication rules
 

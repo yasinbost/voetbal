@@ -6,11 +6,10 @@ import { emptyVoteState } from '@/lib/action-state';
 import { motmTalliesAction, voteMotmAction } from '@/app/actions';
 import type { VoteTally } from '@/lib/types';
 import { Notice, SubmitButton } from './FormBits';
+import MotmResults from './MotmResults';
 
-export interface Candidate {
-  id: string;
-  name: string;
-}
+export type { PollCandidate as Candidate } from '@/lib/motm';
+import type { PollCandidate as Candidate } from '@/lib/motm';
 
 const VOTER_KEY = 'motm-voter-id';
 const voteKey = (matchId: string) => `motm-vote:${matchId}`;
@@ -47,35 +46,6 @@ function formatRemaining(ms: number): string {
   const minutes = totalMinutes % 60;
   if (hours > 0) return `${hours} sa ${minutes} dk`;
   return `${minutes} dk`;
-}
-
-function Results({ candidates, tallies }: { candidates: Candidate[]; tallies: VoteTally[] }) {
-  const counts = new Map(tallies.map((t) => [t.playerId, t.votes]));
-  const total = tallies.reduce((sum, t) => sum + t.votes, 0);
-  const top = Math.max(0, ...tallies.map((t) => t.votes));
-
-  const rows = [...candidates].sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0));
-
-  return (
-    <div className="poll-results">
-      {rows.map((c) => {
-        const votes = counts.get(c.id) ?? 0;
-        const share = total > 0 ? Math.round((votes / total) * 100) : 0;
-        return (
-          <div key={c.id} className={votes > 0 && votes === top ? 'poll-row leading' : 'poll-row'}>
-            <span className="name">{c.name}</span>
-            <span className="vote-bar" aria-hidden="true">
-              <span style={{ width: `${share}%` }} />
-            </span>
-            <span className="count">{votes}</span>
-          </div>
-        );
-      })}
-      <p className="hint">
-        Toplam {total} oy • Anket kapanınca en çok oyu alan(lar) +1 puan alır.
-      </p>
-    </div>
-  );
 }
 
 export default function MotmPoll({
@@ -160,7 +130,11 @@ export default function MotmPoll({
               </p>
             )}
             {tallies ? (
-              <Results candidates={candidates} tallies={tallies} />
+              <MotmResults
+                candidates={candidates}
+                tallies={tallies}
+                hint="Anket kapanınca en çok oyu alan(lar) +1 puan alır."
+              />
             ) : (
               <p className="hint">Sonuçlar yükleniyor…</p>
             )}

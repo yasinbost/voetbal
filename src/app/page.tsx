@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Leaderboard from '@/components/Leaderboard';
 import MotmPoll, { type Candidate } from '@/components/MotmPoll';
+import MotmResults from '@/components/MotmResults';
 import { getMatches, getPlayers, getVoteTallies } from '@/lib/db';
 import { isPollOpen, latestMatch, motmWinnersByMatch, pollClosesAt } from '@/lib/motm';
 import { computeStats, formatDate } from '@/lib/stats';
@@ -94,6 +95,14 @@ export default async function DashboardPage() {
                     Anket kapandı; {motmNames.length > 1 ? 'eşit oy alanların her birine' : 'kazanana'}{' '}
                     +1 puan eklendi.
                   </p>
+                  <details className="poll-details">
+                    <summary>Oy dağılımı</summary>
+                    <MotmResults
+                      candidates={candidates}
+                      tallies={tallies.filter((t) => t.matchId === pollMatch.id)}
+                      hint="Eşit oy alanların hepsi maçın adamı sayılır."
+                    />
+                  </details>
                 </>
               ) : (
                 <p className="hint">Bu maçta oy kullanılmadı, maçın adamı seçilmedi.</p>

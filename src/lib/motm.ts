@@ -60,3 +60,42 @@ export function latestMatch(matches: Match[]): Match | undefined {
     undefined,
   );
 }
+
+export interface PollCandidate {
+  id: string;
+  name: string;
+}
+
+export interface PollResultRow extends PollCandidate {
+  votes: number;
+  /** Toplam içindeki yüzde payı, tam sayıya yuvarlanmış. */
+  share: number;
+  /** En yüksek oyu alan(lar); eşitlikte hepsi. Hiç oy yoksa kimse. */
+  leading: boolean;
+}
+
+/**
+ * Oy dağılımı tablosu. Yalnızca aday (maça çıkan) oyuncuların oyları sayılır;
+ * maçtan sonradan çıkarılan oyuncuya gelen oy toplama da girmez (`winnersOf` ile tutarlı).
+ */
+export function pollResultRows(
+  candidates: PollCandidate[],
+  tallies: VoteTally[],
+): { rows: PollResultRow[]; total: number } {
+  const counts = new Map<string, number>();
+  for (const t of tallies) counts.set(t.playerId, (counts.get(t.playerId) ?? 0) + t.votes);
+
+  const withVotes = candidates.map((c) => ({ ...c, votes: counts.get(c.id) ?? 0 }));
+  const total = withVotes.reduce((sum, c) => sum + c.votes, 0);
+  const top = Math.max(0, ...withVotes.map((c) => c.votes));
+
+  const rows = withVotes
+    .map((c) => ({
+      ...c,
+      share: total > 0 ? Math.round((c.votes / total) * 100) : 0,
+      leading: c.votes > 0 && c.votes === top,
+    }))
+    .sort((a, b) => b.votes - a.votes);
+
+  return { rows, total };
+}
